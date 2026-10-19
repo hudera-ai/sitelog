@@ -1,86 +1,108 @@
-<p align="center"><img src="screenshot-en.png" alt="SiteLog screenshot" width="100%"></p>
+<p align="center">
+  <img src="assets/favicon.svg" width="56" alt="">
+</p>
+<h1 align="center">SiteLog</h1>
+<p align="center"><b>Daily site reporting for contractors</b> — field messages → structured daily reports → approvals → BOQ progress.<br>
+<a href="https://hudera-ai.github.io/sitelog/">Live demo</a> · <a href="#arabic">العربية</a> · built by <a href="https://hudera-ai.github.io">HUDERA AI</a></p>
 
-# SiteLog
+<p align="center"><img src="docs/dashboard.png" width="860" alt="SiteLog dashboard"></p>
 
-**Field messages → daily reports** · AI automation · by [HUDERA AI](https://www.linkedin.com/company/hudera)
+A complete, working system — not a mock-up. The same code runs in two ways:
 
-Turns the messages, photos and voice notes your field teams already send into a clean daily report in your template, ready for review.
+| | How | Data |
+|---|---|---|
+| **Live demo** (GitHub Pages) | The web app runs SQLite inside your browser (sql.js / WebAssembly). | Sample dataset, stored in your browser only. Reset it from *Settings*. |
+| **Self-hosted** | `npm start` → Node server with a REST API, sessions and a WhatsApp webhook, serving the same web app. | SQLite file in `data/`. |
 
-**[▶ Try the live demo](https://hudera-ai.github.io/sitelog/)** · runs in your browser on sample data · Arabic & English
-
-## The problem
-Supervisors send updates as WhatsApp messages and photos all day. Someone then spends hours each evening rebuilding them into a report for management or the client.
+> Sample data: the company (*Ufuq Al-Bina Contracting Co.*), its people, projects and figures are fictional and exist only to demonstrate the product.
 
 ## What it does
-SiteLog reads the field groups, transcribes voice notes, extracts each activity with quantities and units using rules you agree with the team, matches photos, and builds the report as a PDF for an engineer to approve.
 
-## Business value
-The report is ready when the day ends, in the same format every time, and the person who used to compile it reviews instead of retyping.
-
-## Features
-| Feature | Details |
-| --- | --- |
-| Reads field groups | Text, photos and voice notes |
-| Voice transcription | Arabic and English |
-| Project rules | Units and wording your client expects |
-| Photo matching | Photos placed under the right activity |
-| Your template | PDF or Excel in your existing format |
-| Review step | Nothing is sent before approval |
-
-## How the workflow runs
-**Trigger**: End of shift → **Collect**: Messages & media → **Extract**: Activities & quantities → **Build**: Report PDF → **Approve**: Engineer review
-
-## Typical stack
-WhatsApp · Speech-to-text · LLM extraction · Python PDF engine · Web app
+- **Field messages → report lines.** Paste (or receive via the WhatsApp webhook) a foreman's message in Arabic, English or a mix. The parser extracts manpower by trade, equipment with working/idle/breakdown status, activities with quantities and units, materials received with delivery-note numbers, and issues with type and severity. One click applies the lines to that day's report, and activities are matched to BOQ items automatically.
+- **Daily reports** with manpower, activities, equipment, materials, issues and photos; weather and shift; general and safety notes.
+- **Approval workflow:** foreman/engineer drafts and submits → project manager approves or returns with a comment → locked once approved. Every action is written to an audit log.
+- **BOQ progress** per item (executed vs. quantity) and a value-weighted overall progress and earned value per project, plus manpower and progress trends.
+- **Printable report** (A4) with company header and signature blocks — use *Print / PDF*.
+- **Roles & scoping:** admin, project manager, engineer, foreman, client viewer. Users only see the projects they belong to.
+- **Arabic / English UI**, RTL layout, light and dark themes, responsive down to phone size.
+- **Optional LLM parsing:** set `LLM_API_KEY` and the server asks an OpenAI-compatible model to extract the lines; the rule-based parser remains the fallback and validator.
 
 ## Run it locally
-Open `index.html` in any modern browser. No build step, no server, no data leaves your machine.
+
+```bash
+git clone https://github.com/hudera-ai/sitelog.git
+cd sitelog
+npm install
+npm start            # → http://localhost:8787
+```
+
+Sign in with any demo user, password `demo1234`:
+
+| Email | Role |
+|---|---|
+| khalid@ufuq.example | admin |
+| sara@ufuq.example | project manager |
+| mahmoud@ufuq.example | engineer |
+| ahmed@ufuq.example | foreman |
+| viewer@ufuq.example | client viewer (read-only) |
+
+Other commands: `npm run seed` resets the database to the sample data · `npm test` runs the test suite (parser + workflow) · `npm run dev` restarts on file changes.
+
+## Architecture
+
+```
+sitelog/
+├── index.html, src/, assets/     web app (vanilla ES modules, no build step)
+│   └── src/api.js                one client interface, two transports: HTTP or in-browser SQLite
+├── shared/                       code used by BOTH the server and the browser demo
+│   ├── service.js                every operation (auth, projects, reports, inbox, dashboard)
+│   ├── parser.js                 field-message parser (AR/EN) + BOQ matching
+│   ├── seed.js                   deterministic sample dataset
+│   └── auth.js, dbx.js           PBKDF2 passwords (Web Crypto), SQL helper
+├── server/src/                   Express API, sessions, WhatsApp webhook, optional LLM parsing
+├── db/schema.sql                 SQLite schema (14 tables)
+├── tests/                        node:test suites
+└── docs/                         screenshots, API reference
+```
+
+The domain logic lives once in `shared/service.js` and is exercised identically by the REST layer and by the browser demo, so what you click in the demo is exactly what the server does.
+
+### REST API (summary)
+
+`POST /api/auth/login` · `GET /api/projects` · `GET /api/projects/:id` (BOQ + progress) · `GET|POST|PATCH /api/reports` · `POST /api/reports/:id/submit|approve|return` · `GET|POST /api/inbox` · `POST /api/inbox/:id/apply` · `POST /api/parse` · `GET /api/dashboard` · `GET /api/audit` · `GET|POST /webhook/whatsapp` (Meta Cloud API). Full reference in [docs/API.md](docs/API.md).
+
+## Screenshots
+
+| Project page (BOQ & progress) | Inbox (message → lines) |
+|---|---|
+| ![](docs/project.png) | ![](docs/inbox.png) |
+
+| Report | Arabic, dark theme | Mobile |
+|---|---|---|
+| ![](docs/report.png) | ![](docs/dashboard-ar.png) | <img src="docs/mobile.png" width="220"> |
+
+## Production notes
+
+This repository is a product demo that is deliberately dependency-light (Express + sql.js). For a client deployment HUDERA AI typically adds: PostgreSQL instead of SQLite, persistent sessions, object storage for photos, the WhatsApp Business API connection, scheduled PDF e-mails, and the client's own report template.
 
 ---
 
-<div dir="rtl">
+<a id="arabic"></a>
+## SiteLog بالعربية
 
-## SiteLog بالعربي
+**نظام التقارير اليومية لمواقع المقاولات** — رسائل الموقع ← تقرير يومي منظم ← اعتماد ← نسبة إنجاز من جدول الكميات.
 
-**رسائل الميدان ← تقارير يومية**
+- **من رسالة واتساب إلى سطور التقرير:** الفورمان يبعت رسالة بالعربي أو الإنجليزي (مثل: «12 نجار، 8 حداد، تم صب 35 م3 سقف الدور الثاني، لودر 1 عطلان، وصل 200 كيس أسمنت»)، النظام يستخرج العمالة والمعدات والأعمال والمواد والملاحظات، ويضيفها لتقرير اليوم بضغطة واحدة، ويربط الأعمال ببنود جدول الكميات تلقائيًا.
+- **تقرير يومي كامل:** عمالة، أعمال منفذة، معدات، مواد مستلمة، ملاحظات ومشاكل، طقس ووردية.
+- **دورة اعتماد:** الفورمان يرسل ← مدير المشروع يعتمد أو يعيد بتعليق ← التقرير يُقفل بعد الاعتماد، مع سجل عمليات كامل.
+- **الإنجاز:** نسبة تنفيذ كل بند، وإنجاز كلي مرجّح بالقيمة، وقيمة منجزة لكل مشروع.
+- **طباعة A4** بترويسة الشركة وخانات التوقيع.
+- **صلاحيات:** مدير نظام، مدير مشروع، مهندس، فورمان، مشاهد للعميل — كل مستخدم يرى مشاريعه فقط.
+- **عربي/إنجليزي** مع اتجاه RTL، مظهر فاتح وداكن، ويعمل على الموبايل.
 
-يحوّل الرسائل والصور والملاحظات الصوتية التي ترسلها فرقك الميدانية إلى تقرير يومي منظم بقالبك، جاهز للمراجعة.
+> البيانات تجريبية: الشركة (أفق البناء للمقاولات) والأشخاص والمشاريع والأرقام كلها افتراضية لغرض العرض فقط.
 
-### المشكلة
-المشرفون يرسلون التحديثات رسائل وصوراً على واتساب طوال اليوم، ثم يقضي أحدهم ساعات كل مساء في تجميعها في تقرير للإدارة أو العميل.
-
-### ما الذي يفعله
-يقرأ SiteLog مجموعات الميدان، ويفرّغ الملاحظات الصوتية، ويستخرج كل نشاط بكمياته ووحداته وفق قواعد تتفق عليها مع الفريق، ويطابق الصور، ثم يبني التقرير PDF ليعتمده المهندس.
-
-### القيمة للأعمال
-التقرير جاهز مع نهاية اليوم وبنفس الشكل كل مرة، ومن كان يجمعه يدوياً أصبح يراجعه فقط.
-
-### المزايا
-| الميزة | التفاصيل |
-| --- | --- |
-| يقرأ مجموعات الميدان | نصوص وصور وملاحظات صوتية |
-| تفريغ الصوت | عربي وإنجليزي |
-| قواعد المشروع | الوحدات والصياغة التي يتوقعها عميلك |
-| مطابقة الصور | كل صورة تحت النشاط الصحيح |
-| قالبك | PDF أو Excel بنفس شكلك الحالي |
-| خطوة مراجعة | لا يُرسل شيء قبل الاعتماد |
-
-### كيف يسير العمل
-**المُشغِّل**: نهاية الوردية ← **Collect**: الرسائل والوسائط ← **الاستخراج**: الأنشطة والكميات ← **Build**: تقرير PDF ← **اعتماد**: مراجعة المهندس
-
-<p align="center"><img src="screenshot-ar.png" alt="SiteLog بالعربي" width="100%"></p>
-
-</div>
+**التشغيل:** `npm install` ثم `npm start` ويفتح على `http://localhost:8787` — كلمة مرور كل المستخدمين التجريبيين `demo1234`.
 
 ---
-
-## About HUDERA AI
-HUDERA AI builds WhatsApp AI assistants, business dashboards, workflow automations and custom SaaS products for companies in Saudi Arabia and the Gulf.
-
-- LinkedIn: [linkedin.com/company/hudera](https://www.linkedin.com/company/hudera)
-- Email: hudera.ai@gmail.com
-- WhatsApp: [+20 155 515 9139](https://wa.me/201555159139)
-
-> This repository is a product demo. Company names, people and figures inside it are fictional sample data.
-
-© 2026 HUDERA AI. All rights reserved.
+© 2026 HUDERA AI · AI automation & SaaS products for businesses in Saudi Arabia and the Gulf · [hudera-ai.github.io](https://hudera-ai.github.io)
